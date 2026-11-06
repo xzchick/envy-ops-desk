@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "envy-ops-desk"
+version = "0.1.0"
+description = "ENVY Ops Desk: offline, encrypted, revision-preserving operations plans with authenticated handoffs, in a native app window"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+  "cryptography>=42,<47",
+  "PyQt6>=6.7,<7",
+]
+
+[project.scripts]
+envy-ops-desk = "envy_ops_desk.cli:main"
+
+[project.gui-scripts]
+envy-ops-desk-gui = "envy_ops_desk.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["envy_ops_desk*"]
