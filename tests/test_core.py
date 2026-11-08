@@ -102,6 +102,20 @@ class OpsDeskTest(unittest.TestCase):
         with self.assertRaises(OpsDeskError):
             self.add(p0, "bad", {"kind": "checkin", "title": "Call", "due_utc": "2026-10-17T16:00:00+02:00"})
 
+    def test_ical_export(self):
+        p0 = self.new_plan()
+        _, p1 = self.add(p0, "r1", {"kind": "checkin", "title": "Lab call", "assignee": "Raven",
+                                    "due_utc": "2026-10-17T14:00:00+00:00"})
+        text = core.ical(p1, self.SECRET).decode("utf-8")
+        self.assertIn("BEGIN:VCALENDAR", text)
+        self.assertIn("SUMMARY:Lab call (Raven)", text)
+        self.assertIn("DTSTART:20261017T140000Z", text)       # UTC, iCal basic format
+        self.assertTrue(text.endswith("END:VCALENDAR\r\n"))
+        out = self.dir / "cal.ics"
+        res = core.write_ical(p1, out, self.SECRET)
+        self.assertEqual(res["events"], 1)
+        self.assertTrue(out.exists())
+
     def test_bad_status_rejected(self):
         p0 = self.new_plan()
         with self.assertRaises(OpsDeskError):

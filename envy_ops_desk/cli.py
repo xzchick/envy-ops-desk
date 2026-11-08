@@ -13,7 +13,7 @@ import sys
 from . import __version__
 from .core import (OpsDeskError, append, check_passphrase, create, export,
                    handoff_create, handoff_import, handoff_inspect, inspect,
-                   state_from, template)
+                   state_from, template, write_ical)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -65,6 +65,10 @@ def build_parser() -> argparse.ArgumentParser:
     exp.add_argument("source")
     exp.add_argument("destination", help="a new report file; never overwritten")
     exp.add_argument("--format", default="html", choices=("html", "json"))
+
+    ic = commands.add_parser("ical", help="write due dates to an iCal (.ics) calendar file")
+    ic.add_argument("source")
+    ic.add_argument("destination", help="a new .ics file; never overwritten")
     return root
 
 
@@ -115,6 +119,10 @@ def _run(args) -> int:
         return 0
     if args.command == "inspect":
         print(json.dumps(inspect(args.source, _passphrase()), indent=2, ensure_ascii=False))
+        return 0
+    if args.command == "ical":
+        result = write_ical(args.source, args.destination, _passphrase())
+        print(f"ical: wrote {result['events']} event(s) → {result['output']}  sha256 {result['sha256']}")
         return 0
     if args.command == "state":
         st = state_from(args.source, _passphrase())
