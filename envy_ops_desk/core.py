@@ -392,6 +392,46 @@ def state_from(source, secret, now=None):
     return state(data, now)
 
 
+# --- iCal (.ics) export of due dates -----------------------------------------
+
+def _ics_escape(text):
+    return str(text).replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+
+def _ics_dt(iso):
+    return _parse_utc(iso).astimezone(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def ical(source, secret, now=None):
+    """Render every assignment and check-in that has a due time as an iCal VEVENT."""
+    data, _ = _load(source, secret)
+    st = state(data, now)
+    stamp = _ics_dt(st["computed_utc"])
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ENVY//Ops Desk//EN", "CALSCALE:GREGORIAN"]
+
+    def event(uid, due, summary, desc):
+        lines.extend(["BEGIN:VEVENT", f"UID:{uid}@envy-ops-desk", f"DTSTAMP:{stamp}",
+                      f"DTSTART:{_ics_dt(due)}", f"SUMMARY:{_ics_escape(summary)}",
+                      f"DESCRIPTION:{_ics_escape(desc)}", "END:VEVENT"])
+
+    for a in st["assignments"]:
+        if a["due_utc"]:
+            event(a["id"], a["due_utc"], f"{a['task']} ({a['assignee'] or 'unassigned'})",
+                  f"assignment · {a['status']} · {a['due_state']}")
+    for c in st["checkins"]:
+        event(c["id"], c["due_utc"], f"{c['label']} ({c['assignee'] or 'unassigned'})",
+              f"check-in · {c['due_state']}")
+    lines.append("END:VCALENDAR")
+    return ("\r\n".join(lines) + "\r\n").encode("utf-8")
+
+
+def write_ical(source, destination, secret, now=None):
+    output = ical(source, secret, now)
+    new_file(destination, output)
+    return {"output": str(destination), "events": output.count(b"BEGIN:VEVENT"),
+            "sha256": hashlib.sha256(output).hexdigest()}
+
+
 def inspect(source, secret):
     data, envelope_hash = _load(source, secret)
     return {"operation_id": data["operation_id"], "title": data["title"], "objective": data["objective"],
