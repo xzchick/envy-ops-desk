@@ -324,6 +324,40 @@ def append_record(source, destination, value, secret):
     return dict(result, added_record_id=record["id"], input_preserved=True)
 
 
+def recurring_checkins(source, destination, secret, label, first_due_utc, interval_days, count,
+                       assignee="", note=""):
+    """Add a series of check-ins at a fixed cadence in one revision: `count` check-ins
+    due at first_due_utc, then every `interval_days` after. Each is an ordinary
+    check-in record, chained into the journal; they are reminders, not enforcement."""
+    if type(count) is not int or isinstance(count, bool) or not 1 <= count <= 200:
+        raise OpsDeskError("count must be a whole number from 1 to 200")
+    if type(interval_days) is not int or isinstance(interval_days, bool) or not 1 <= interval_days <= 3650:
+        raise OpsDeskError("interval_days must be a whole number from 1 to 3650")
+    first = _parse_utc(first_due_utc)
+    data, previous_envelope = _load(source, secret)
+    if len(data["records"]) + count > MAX_RECORDS:
+        raise OpsDeskError("Plan would exceed its 1000 record limit")
+    ids = []
+    for k in range(count):
+        due = (first + datetime.timedelta(days=interval_days * k)).isoformat()
+        value = {"kind": "checkin", "title": label, "due_utc": due}
+        if assignee:
+            value["assignee"] = assignee
+        if note:
+            value["note"] = note
+        existing = {r["id"]: r["kind"] for r in data["records"]}
+        record = _validate_record(value, existing)
+        record.update(id=str(uuid.uuid4()), recorded_utc=_utc(),
+                      previous_sha256=data["records"][-1]["record_sha256"] if data["records"] else "0" * 64)
+        record["record_sha256"] = hashlib.sha256(_canonical(record)).hexdigest()
+        data["records"].append(record)
+        data["revision"] += 1
+        ids.append(record["id"])
+    data["previous_envelope_sha256"] = previous_envelope
+    result = _write(destination, data, secret)
+    return dict(result, checkins=count, first_due_utc=first.isoformat(), added_record_ids=ids)
+
+
 # --- Derived views: due states, assignments, check-ins, aliases --------------
 
 def _due_state(due_iso, now, settled):
