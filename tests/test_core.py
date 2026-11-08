@@ -271,6 +271,22 @@ class OpsDeskTest(unittest.TestCase):
         self.assertEqual(value["kind"], "checkin")
         self.assertIn("due_utc", value)
 
+    # ----- state filter by assignee (v0.2) -----------------------------
+    def test_state_filter_by_assignee(self):
+        p0 = self.new_plan()
+        _, p1 = self.add(p0, "r1", {"kind": "assignment", "title": "Review inventory", "assignee": "Raven"})
+        _, p2 = self.add(p1, "r2", {"kind": "assignment", "title": "Patch host", "assignee": "Wren"})
+        _, p3 = self.add(p2, "r3", {"kind": "checkin", "title": "Lab call", "assignee": "raven",
+                                    "due_utc": "2026-10-17T14:00:00+00:00"})
+        full = core.state_from(p3, self.SECRET)
+        self.assertEqual(len(full["assignments"]), 2)
+        raven = core.state_from(p3, self.SECRET, assignee="RAVEN")   # case-insensitive
+        self.assertEqual([a["task"] for a in raven["assignments"]], ["Review inventory"])
+        self.assertEqual(len(raven["checkins"]), 1)                  # "raven" == "RAVEN"
+        self.assertEqual(raven["filtered_assignee"], "RAVEN")
+        none = core.state_from(p3, self.SECRET, assignee="nobody")
+        self.assertEqual((none["assignments"], none["checkins"]), ([], []))
+
 
 if __name__ == "__main__":
     unittest.main()
