@@ -51,6 +51,13 @@ class CLITest(unittest.TestCase):
         report = json.loads(out)
         self.assertEqual(report["assignments"][0]["task"], "Review inventory")
 
+        # --pretty --no-color renders a plain table with the due state and no ANSI codes.
+        code, out, _ = self.invoke("state", r1, "--pretty", "--no-color")
+        self.assertEqual(code, 0)
+        self.assertIn("Review inventory", out)
+        self.assertIn("no due time", out)
+        self.assertNotIn("\033[", out)
+
     def test_export_writes_report(self):
         plan = self.dir / "c.envyops"
         self.invoke("new", plan, "--title", "Plan")

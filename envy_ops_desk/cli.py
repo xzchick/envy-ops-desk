@@ -46,6 +46,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     st = commands.add_parser("state", help="print current assignments, check-ins and aliases with due states")
     st.add_argument("source")
+    st.add_argument("--pretty", action="store_true", help="print a human-readable table instead of JSON")
+    st.add_argument("--no-color", action="store_true", help="disable ANSI colour in --pretty output")
 
     hc = commands.add_parser("handoff", help="seal the plan into an authenticated handoff bundle")
     hc.add_argument("source", help="the current encrypted plan")
@@ -115,9 +117,40 @@ def _run(args) -> int:
         print(json.dumps(inspect(args.source, _passphrase()), indent=2, ensure_ascii=False))
         return 0
     if args.command == "state":
-        print(json.dumps(state_from(args.source, _passphrase()), indent=2, ensure_ascii=False))
+        st = state_from(args.source, _passphrase())
+        if args.pretty:
+            print(_render_state(st, color=sys.stdout.isatty() and not args.no_color))
+        else:
+            print(json.dumps(st, indent=2, ensure_ascii=False))
         return 0
     return 0
+
+
+# ANSI colour per due state for the --pretty table.
+_STATE_ANSI = {"overdue": "31", "due soon": "33", "scheduled": "36",
+               "settled": "32", "no due time": "90"}
+
+
+def _tint(text, code, color):
+    return f"\033[{code}m{text}\033[0m" if color else text
+
+
+def _render_state(st, color):
+    lines = [f"{st['title']}  ·  revision {st['revision']}"]
+    if st["assignments"]:
+        lines.append("Assignments:")
+        for a in st["assignments"]:
+            ds = _tint(f"{a['due_state']:>11}", _STATE_ANSI.get(a["due_state"], "0"), color)
+            lines.append(f"  [{ds}] {a['task']}  ({a['assignee'] or 'unassigned'}, {a['status']}, "
+                         f"due {a['due_utc'] or '—'})")
+    if st["checkins"]:
+        lines.append("Check-ins:")
+        for c in st["checkins"]:
+            ds = _tint(f"{c['due_state']:>11}", _STATE_ANSI.get(c["due_state"], "0"), color)
+            lines.append(f"  [{ds}] {c['label']}  ({c['assignee'] or 'unassigned'}, due {c['due_utc']})")
+    if not st["assignments"] and not st["checkins"]:
+        lines.append("  (no assignments or check-ins yet)")
+    return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
