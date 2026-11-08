@@ -387,9 +387,20 @@ def state(data, now=None):
                      "they are not trusted timestamps, and role labels are not access controls."}
 
 
-def state_from(source, secret, now=None):
+def state_from(source, secret, now=None, assignee=None):
+    """Current state, optionally narrowed to one assignee's assignments and check-ins.
+
+    The assignee match is case-insensitive and exact against the name you entered
+    (a role label is not an access control, so this is a view, not a permission).
+    """
     data, _ = _load(source, secret)
-    return state(data, now)
+    result = state(data, now)
+    if assignee is not None:
+        target = assignee.strip().lower()
+        result["assignments"] = [a for a in result["assignments"] if a["assignee"].lower() == target]
+        result["checkins"] = [c for c in result["checkins"] if c["assignee"].lower() == target]
+        result["filtered_assignee"] = assignee
+    return result
 
 
 # --- iCal (.ics) export of due dates -----------------------------------------
