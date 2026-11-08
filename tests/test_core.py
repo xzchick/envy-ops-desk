@@ -288,5 +288,32 @@ class OpsDeskTest(unittest.TestCase):
         self.assertEqual((none["assignments"], none["checkins"]), ([], []))
 
 
+    # ----- recurring check-ins (v0.2) ----------------------------------
+    def test_recurring_checkins_series(self):
+        p0 = self.new_plan()
+        p1 = self.dir / "r1"
+        result = core.recurring_checkins(p0, p1, self.SECRET, "Weekly sync",
+                                         "2026-01-01T09:00:00+00:00", 7, 4, assignee="Raven")
+        self.assertEqual(result["checkins"], 4)
+        data, _ = core._load(p1, self.SECRET)
+        self.assertEqual(data["revision"], 4)
+        checkins = [r for r in data["records"] if r["kind"] == "checkin"]
+        self.assertEqual(len(checkins), 4)
+        dues = sorted(r["due_utc"] for r in checkins)
+        self.assertTrue(dues[0].startswith("2026-01-01T09:00:00"))
+        self.assertTrue(dues[1].startswith("2026-01-08T09:00:00"))
+        self.assertTrue(dues[3].startswith("2026-01-22T09:00:00"))
+        self.assertEqual(data["records"][1]["previous_sha256"], data["records"][0]["record_sha256"])
+        view = core.state_from(p1, self.SECRET, assignee="Raven")
+        self.assertEqual(len(view["checkins"]), 4)
+
+    def test_recurring_checkins_bounds(self):
+        p0 = self.new_plan()
+        for interval, count in [(0, 4), (7, 0), (7, 201)]:
+            with self.assertRaises(OpsDeskError):
+                core.recurring_checkins(p0, self.dir / f"x{interval}_{count}", self.SECRET, "s",
+                                        "2026-01-01T00:00:00+00:00", interval, count)
+
+
 if __name__ == "__main__":
     unittest.main()

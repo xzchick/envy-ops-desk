@@ -13,7 +13,7 @@ import sys
 from . import __version__
 from .core import (OpsDeskError, append, check_passphrase, create, export,
                    handoff_create, handoff_import, handoff_inspect, inspect,
-                   state_from, template, write_ical)
+                   recurring_checkins, state_from, template, write_ical)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,6 +35,16 @@ def build_parser() -> argparse.ArgumentParser:
     add.add_argument("source", help="the current encrypted plan")
     add.add_argument("destination", help="a new file for the next revision; never overwritten")
     add.add_argument("--record", required=True, help="a JSON file holding one record")
+
+    rc = commands.add_parser("recurring", help="add a series of check-ins at a fixed cadence (one revision)")
+    rc.add_argument("source", help="the current encrypted plan")
+    rc.add_argument("destination", help="a new file for the next revision; never overwritten")
+    rc.add_argument("--label", required=True, help="the check-in title, repeated for each")
+    rc.add_argument("--first", required=True, metavar="UTC", help="the first due time (ISO 8601 UTC)")
+    rc.add_argument("--every", type=int, required=True, metavar="DAYS", help="days between check-ins")
+    rc.add_argument("--count", type=int, required=True, metavar="N", help="how many check-ins (1–200)")
+    rc.add_argument("--assignee", default="", help="an optional assignee for all of them")
+    rc.add_argument("--note", default="", help="an optional note for all of them")
 
     tmpl = commands.add_parser("template", help="write a blank record template to edit")
     tmpl.add_argument("destination", help="a new JSON file; never overwritten")
@@ -96,6 +106,12 @@ def _run(args) -> int:
     if args.command == "add":
         result = append(args.source, args.destination, args.record, _passphrase())
         print(f"added record {result['added_record_id']} → {result['output']} (revision {result['revision']})")
+        return 0
+    if args.command == "recurring":
+        result = recurring_checkins(args.source, args.destination, _passphrase(), args.label,
+                                    args.first, args.every, args.count, args.assignee, args.note)
+        print(f"added {result['checkins']} check-in(s) from {result['first_due_utc']} every {args.every}d → "
+              f"{result['output']} (revision {result['revision']})")
         return 0
     if args.command == "export":
         result = export(args.source, args.destination, _passphrase(), args.format)
