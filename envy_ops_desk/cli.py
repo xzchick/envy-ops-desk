@@ -58,6 +58,9 @@ def build_parser() -> argparse.ArgumentParser:
     st.add_argument("source")
     st.add_argument("--assignee", default=None, metavar="NAME",
                     help="only show assignments and check-ins for this assignee (case-insensitive)")
+    st.add_argument("--due", default=None,
+                    choices=("overdue", "due-soon", "scheduled", "settled", "none"),
+                    help="only show items in this due state")
     st.add_argument("--pretty", action="store_true", help="print a human-readable table instead of JSON")
     st.add_argument("--no-color", action="store_true", help="disable ANSI colour in --pretty output")
 
@@ -143,7 +146,7 @@ def _run(args) -> int:
         print(f"ical: wrote {result['events']} event(s) → {result['output']}  sha256 {result['sha256']}")
         return 0
     if args.command == "state":
-        st = state_from(args.source, _passphrase(), assignee=args.assignee)
+        st = state_from(args.source, _passphrase(), assignee=args.assignee, due=args.due)
         if args.pretty:
             print(_render_state(st, color=sys.stdout.isatty() and not args.no_color))
         else:
