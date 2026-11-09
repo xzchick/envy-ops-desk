@@ -341,5 +341,29 @@ class OpsDeskTest(unittest.TestCase):
             core.state_from(p0, self.SECRET, due="later")
 
 
+    # ----- Markdown export (v0.2) --------------------------------------
+    def test_export_markdown(self):
+        p0 = self.new_plan(title="Night ops", objective="Hold the line")
+        p1 = self.dir / "r1"
+        core.append_record(p0, p1, {"kind": "alias", "title": "Raven", "role_label": "Field lead"}, self.SECRET)
+        p2 = self.dir / "r2"
+        core.append_record(p1, p2, {"kind": "assignment", "title": "Review inventory",
+                                    "assignee": "Raven"}, self.SECRET)
+        p3 = self.dir / "r3"
+        core.append_record(p2, p3, {"kind": "checkin", "title": "Lab call", "assignee": "Raven",
+                                    "due_utc": "2026-10-17T14:00:00+00:00"}, self.SECRET)
+        out = self.dir / "r.md"
+        res = core.export(p3, out, self.SECRET, "md")
+        self.assertEqual(res["format"], "md")
+        text = out.read_text()
+        self.assertTrue(text.startswith("# Night ops"))
+        self.assertIn("Hold the line", text)
+        self.assertIn("## Aliases (1)", text)
+        self.assertIn("## Assignments (1)", text)
+        self.assertIn("Review inventory", text)
+        self.assertIn("## Check-ins (1)", text)
+        self.assertIn("Lab call", text)
+
+
 if __name__ == "__main__":
     unittest.main()

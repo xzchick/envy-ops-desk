@@ -558,8 +558,8 @@ def handoff_import(source, destination, handoff_secret, secret):
 # --- Plaintext export --------------------------------------------------------
 
 def export(source, destination, secret, format="html", now=None):
-    if format not in ("html", "json"):
-        raise OpsDeskError("Export format must be html or json")
+    if format not in ("html", "json", "md"):
+        raise OpsDeskError("Export format must be html, json or md")
     data, envelope_hash = _load(source, secret)
     view = state(data, now)
     report = {"plan": {k: data[k] for k in ("operation_id", "title", "objective", "created_utc", "revision")},
@@ -570,6 +570,37 @@ def export(source, destination, secret, format="html", now=None):
                              "establish provenance, truth, or a trusted time."}
     if format == "json":
         output = (json.dumps(report, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    elif format == "md":
+        def cell(value):
+            return str(value).replace("|", "\\|").replace("\n", " ").replace("\r", " ")
+
+        lines = [f"# {data['title']}", ""]
+        if data["objective"]:
+            lines += [f"> {data['objective']}", ""]
+        lines += [report["limitations"], "",
+                  f"- **Operation:** `{data['operation_id']}`",
+                  f"- **Revision:** {data['revision']}",
+                  f"- **Computed:** {view['computed_utc']}", "",
+                  f"## Aliases ({len(view['aliases'])})"]
+        lines += [f"- **{cell(a['alias'])}** — {cell(a['role_label'] or '—')}"
+                  + (f" · {cell(a['note'])}" if a["note"] else "") for a in view["aliases"]] or ["_None._"]
+        lines += ["", f"## Assignments ({len(view['assignments'])})"]
+        if view["assignments"]:
+            lines += ["| Task | Assignee | Status | Due | State |", "| --- | --- | --- | --- | --- |"]
+            for a in view["assignments"]:
+                lines.append(f"| {cell(a['task'])} | {cell(a['assignee'] or '—')} | {a['status']} | "
+                             f"{a['due_utc'] or '—'} | {a['due_state']} |")
+        else:
+            lines.append("_None._")
+        lines += ["", f"## Check-ins ({len(view['checkins'])})"]
+        if view["checkins"]:
+            lines += ["| Label | Assignee | Due | State |", "| --- | --- | --- | --- |"]
+            for c in view["checkins"]:
+                lines.append(f"| {cell(c['label'])} | {cell(c['assignee'] or '—')} | {c['due_utc']} | "
+                             f"{c['due_state']} |")
+        else:
+            lines.append("_None._")
+        output = ("\n".join(lines) + "\n").encode("utf-8")
     else:
         def esc(value):
             return html.escape(str(value), quote=True)

@@ -79,7 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     exp = commands.add_parser("export", help="write a plaintext HTML or JSON report")
     exp.add_argument("source")
     exp.add_argument("destination", help="a new report file; never overwritten")
-    exp.add_argument("--format", default="html", choices=("html", "json"))
+    exp.add_argument("--format", default="html", choices=("html", "json", "md"))
 
     ic = commands.add_parser("ical", help="write due dates to an iCal (.ics) calendar file")
     ic.add_argument("source")
