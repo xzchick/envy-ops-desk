@@ -421,19 +421,32 @@ def state(data, now=None):
                      "they are not trusted timestamps, and role labels are not access controls."}
 
 
-def state_from(source, secret, now=None, assignee=None):
-    """Current state, optionally narrowed to one assignee's assignments and check-ins.
+# Canonical CLI tokens for the computed due states (which contain spaces).
+DUE_FILTERS = {"overdue": "overdue", "due-soon": "due soon", "scheduled": "scheduled",
+               "settled": "settled", "none": "no due time"}
 
-    The assignee match is case-insensitive and exact against the name you entered
-    (a role label is not an access control, so this is a view, not a permission).
+
+def state_from(source, secret, now=None, assignee=None, due=None):
+    """Current state, optionally narrowed to one assignee and/or one due state.
+
+    The assignee match is case-insensitive and exact against the name you entered;
+    `due` is one of DUE_FILTERS (overdue, due-soon, scheduled, settled, none). A role
+    label is not an access control, so this is a view, not a permission.
     """
     data, _ = _load(source, secret)
-    result = state(data, now)
+    result = state(data, _parse_utc(now) if isinstance(now, str) else now)
     if assignee is not None:
         target = assignee.strip().lower()
         result["assignments"] = [a for a in result["assignments"] if a["assignee"].lower() == target]
         result["checkins"] = [c for c in result["checkins"] if c["assignee"].lower() == target]
         result["filtered_assignee"] = assignee
+    if due is not None:
+        if due not in DUE_FILTERS:
+            raise OpsDeskError("Due filter must be one of: " + ", ".join(DUE_FILTERS))
+        want = DUE_FILTERS[due]
+        result["assignments"] = [a for a in result["assignments"] if a["due_state"] == want]
+        result["checkins"] = [c for c in result["checkins"] if c["due_state"] == want]
+        result["filtered_due_state"] = want
     return result
 
 

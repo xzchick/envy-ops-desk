@@ -315,5 +315,31 @@ class OpsDeskTest(unittest.TestCase):
                                         "2026-01-01T00:00:00+00:00", interval, count)
 
 
+    # ----- filter state by due status (v0.2) ---------------------------
+    def test_state_filter_by_due(self):
+        p0 = self.new_plan()
+        p1 = self.dir / "d1"
+        core.append_record(p0, p1, {"kind": "assignment", "title": "Late", "assignee": "Raven",
+                                    "due_utc": "2026-01-01T00:00:00+00:00"}, self.SECRET)
+        p2 = self.dir / "d2"
+        core.append_record(p1, p2, {"kind": "assignment", "title": "Far off", "assignee": "Wren",
+                                    "due_utc": "2026-06-01T00:00:00+00:00"}, self.SECRET)
+        p3 = self.dir / "d3"
+        core.append_record(p2, p3, {"kind": "assignment", "title": "Someday"}, self.SECRET)
+        now = "2026-02-01T00:00:00+00:00"
+        overdue = core.state_from(p3, self.SECRET, now=now, due="overdue")
+        self.assertEqual([a["task"] for a in overdue["assignments"]], ["Late"])
+        self.assertEqual(overdue["filtered_due_state"], "overdue")
+        self.assertEqual([a["task"] for a in core.state_from(p3, self.SECRET, now=now, due="none")["assignments"]],
+                         ["Someday"])
+        self.assertEqual([a["task"] for a in core.state_from(p3, self.SECRET, now=now, due="scheduled")["assignments"]],
+                         ["Far off"])
+
+    def test_state_due_filter_rejects_unknown(self):
+        p0 = self.new_plan()
+        with self.assertRaises(OpsDeskError):
+            core.state_from(p0, self.SECRET, due="later")
+
+
 if __name__ == "__main__":
     unittest.main()
