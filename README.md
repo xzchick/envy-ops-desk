@@ -26,7 +26,7 @@ AES-256-GCM plans, a hash-chained revision journal, computed due states, authent
 </p>
 
 <p align="center">
-  <img src="assets/readme/window.png" width="90%" alt="The Ops Desk window: plan controls, an assignments table coloured by status and due state, and the add-record forms, in the ENVY neon theme" />
+  <img src="assets/readme/demo.gif" width="90%" alt="The Ops Desk window: plan controls, an assignments table coloured by status and due state, and the add-record forms, in the ENVY neon theme" />
 </p>
 
 <p align="center"><sub>A real native window — not a browser view. The title pulses, the stars twinkle, and a light travels the accent bar.</sub></p>
