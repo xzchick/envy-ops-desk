@@ -204,6 +204,26 @@ class OpsDeskTest(unittest.TestCase):
         self.assertEqual(original["operation_id"], copy["operation_id"])
         self.assertEqual(original["records"], copy["records"])
 
+    def test_handoff_verify_valid_and_tampered(self):
+        p1, _ = self._plan_with_assignment()
+        handoff = self.dir / "h.envyho"
+        ho_secret = b"a shared handoff secret"
+        core.handoff_create(p1, handoff, self.SECRET, ho_secret, note="For Raven")
+        # A good bundle verifies.
+        result = core.handoff_verify(handoff, ho_secret)
+        self.assertTrue(result["valid"])
+        self.assertEqual(result["records"], 1)
+        # Wrong passphrase fails to verify (AES-GCM auth).
+        with self.assertRaises(OpsDeskError):
+            core.handoff_verify(handoff, b"the wrong secret here")
+        # A flipped byte in the ciphertext fails to verify.
+        raw = bytearray(handoff.read_bytes())
+        raw[-1] ^= 0x01
+        tampered = self.dir / "tampered.envyho"
+        tampered.write_bytes(bytes(raw))
+        with self.assertRaises(OpsDeskError):
+            core.handoff_verify(tampered, ho_secret)
+
     def test_handoff_wrong_passphrase_fails(self):
         p1, _ = self._plan_with_assignment()
         handoff = self.dir / "h.envyho"
