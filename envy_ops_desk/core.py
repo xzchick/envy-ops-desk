@@ -562,6 +562,20 @@ def handoff_inspect(source, handoff_secret):
             "warning": "A verified handoff proves the passphrase only; it does not establish who created it."}
 
 
+def handoff_verify(source, handoff_secret):
+    """Confirm a handoff bundle decrypts and its plan's journal hash chain is intact,
+    without revealing the plan's contents. Any problem — wrong passphrase, tampering,
+    a broken chain — raises :class:`OpsDeskError`; a clean bundle returns a small summary.
+    """
+    bundle = _load_handoff(source, handoff_secret)   # decrypts, then validates schema + chain
+    plan = bundle["plan"]
+    return {"valid": True, "handoff_created_utc": bundle["created_utc"],
+            "revision": plan["revision"], "records": len(plan["records"]),
+            "source_envelope_sha256": bundle["source_envelope_sha256"],
+            "note": "The bundle decrypted and its journal hash chain is intact — this proves the "
+                    "passphrase and integrity, not who created it."}
+
+
 def handoff_import(source, destination, handoff_secret, secret):
     """Decrypt a handoff and re-encrypt its plan, unchanged, under the local passphrase."""
     bundle = _load_handoff(source, handoff_secret)

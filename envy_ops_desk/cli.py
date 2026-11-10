@@ -12,7 +12,7 @@ import sys
 
 from . import __version__
 from .core import (OpsDeskError, append, check_passphrase, create, export,
-                   handoff_create, handoff_import, handoff_inspect, inspect,
+                   handoff_create, handoff_import, handoff_inspect, handoff_verify, inspect,
                    recurring_checkins, state_from, template, write_ical)
 
 
@@ -75,6 +75,10 @@ def build_parser() -> argparse.ArgumentParser:
     hi.add_argument("source", help="the handoff bundle")
     hi.add_argument("destination", help="a new file for the re-encrypted plan; never overwritten")
 
+    hv = commands.add_parser("handoff-verify",
+                             help="check a handoff bundle decrypts and its hash chain is intact (exit 1 if not)")
+    hv.add_argument("source")
+
     hs = commands.add_parser("handoff-inspect", help="print a handoff's summary without importing (read-only)")
     hs.add_argument("source")
 
@@ -134,6 +138,16 @@ def _run(args) -> int:
         plan_secret = _passphrase(confirm=True, prompt="New plan passphrase: ")
         result = handoff_import(args.source, args.destination, handoff_secret, plan_secret)
         print(f"imported handoff → {result['output']} (revision {result['revision']})")
+        print(result["note"])
+        return 0
+    if args.command == "handoff-verify":
+        try:
+            result = handoff_verify(args.source, _passphrase(prompt="Handoff passphrase: "))
+        except OpsDeskError as exc:
+            print(f"INVALID: {exc}", file=sys.stderr)
+            return 1
+        print(f"VALID — revision {result['revision']}, {result['records']} record(s), "
+              f"created {result['handoff_created_utc']}")
         print(result["note"])
         return 0
     if args.command == "handoff-inspect":
