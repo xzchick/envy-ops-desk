@@ -426,15 +426,30 @@ DUE_FILTERS = {"overdue": "overdue", "due-soon": "due soon", "scheduled": "sched
                "settled": "settled", "none": "no due time"}
 
 
-def state_from(source, secret, now=None, assignee=None, due=None):
-    """Current state, optionally narrowed to one assignee and/or one due state.
+def state_from(source, secret, now=None, assignee=None, due=None, mine=None):
+    """Current state, optionally narrowed to one assignee, one role alias, and/or one
+    due state.
 
-    The assignee match is case-insensitive and exact against the name you entered;
-    `due` is one of DUE_FILTERS (overdue, due-soon, scheduled, settled, none). A role
-    label is not an access control, so this is a view, not a permission.
+    ``mine`` is a role alias: the result keeps assignments and check-ins whose assignee
+    matches that alias *or* the role label the alias stands for (resolved from the plan's
+    own alias records), so "my items" finds work addressed to you by either name. The
+    ``assignee`` match is case-insensitive and exact; ``due`` is one of DUE_FILTERS
+    (overdue, due-soon, scheduled, settled, none). A role label is not an access control,
+    so this is a view, not a permission.
     """
     data, _ = _load(source, secret)
     result = state(data, _parse_utc(now) if isinstance(now, str) else now)
+    if mine is not None:
+        key = mine.strip().lower()
+        roles = {a["role_label"].strip().lower() for a in result["aliases"]
+                 if a["alias"].strip().lower() == key and a["role_label"].strip()}
+        identities = {key} | roles
+        result["assignments"] = [a for a in result["assignments"]
+                                 if a["assignee"].strip().lower() in identities]
+        result["checkins"] = [c for c in result["checkins"]
+                              if c["assignee"].strip().lower() in identities]
+        result["filtered_mine_alias"] = mine
+        result["mine_identities"] = sorted(identities)
     if assignee is not None:
         target = assignee.strip().lower()
         result["assignments"] = [a for a in result["assignments"] if a["assignee"].lower() == target]
