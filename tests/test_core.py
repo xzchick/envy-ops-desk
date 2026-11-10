@@ -288,6 +288,31 @@ class OpsDeskTest(unittest.TestCase):
         self.assertEqual((none["assignments"], none["checkins"]), ([], []))
 
 
+    # ----- "my items" filter by role alias (v0.2) ----------------------
+    def test_state_filter_mine_resolves_role_alias(self):
+        p0 = self.new_plan()
+        # Raven's alias stands for the role "Field lead".
+        _, p1 = self.add(p0, "r1", {"kind": "alias", "title": "Raven", "role_label": "Field lead"})
+        _, p2 = self.add(p1, "r2", {"kind": "assignment", "title": "By alias", "assignee": "Raven"})
+        _, p3 = self.add(p2, "r3", {"kind": "assignment", "title": "By role", "assignee": "Field lead"})
+        _, p4 = self.add(p3, "r4", {"kind": "assignment", "title": "Someone else", "assignee": "Wren"})
+        _, p5 = self.add(p4, "r5", {"kind": "checkin", "title": "Lead call", "assignee": "field lead",
+                                    "due_utc": "2026-10-17T14:00:00+00:00"})
+        mine = core.state_from(p5, self.SECRET, mine="raven")          # case-insensitive alias
+        tasks = sorted(a["task"] for a in mine["assignments"])
+        self.assertEqual(tasks, ["By alias", "By role"])              # both the alias and its role
+        self.assertEqual([c["label"] for c in mine["checkins"]], ["Lead call"])
+        self.assertEqual(mine["filtered_mine_alias"], "raven")
+        self.assertEqual(mine["mine_identities"], ["field lead", "raven"])
+
+    def test_state_filter_mine_without_alias_record(self):
+        # An alias with no matching alias record falls back to just the literal name.
+        p0 = self.new_plan()
+        _, p1 = self.add(p0, "r1", {"kind": "assignment", "title": "Direct", "assignee": "Ghost"})
+        mine = core.state_from(p1, self.SECRET, mine="Ghost")
+        self.assertEqual([a["task"] for a in mine["assignments"]], ["Direct"])
+        self.assertEqual(mine["mine_identities"], ["ghost"])
+
     # ----- recurring check-ins (v0.2) ----------------------------------
     def test_recurring_checkins_series(self):
         p0 = self.new_plan()
