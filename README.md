@@ -76,10 +76,10 @@ Download a bundle from the [latest release](https://github.com/xzchick/envy-ops-
 
 | File | System | Run it |
 |---|---|---|
-| `envy-ops-desk-v0.1.0-macos-arm64.tar.gz` | macOS (Apple Silicon) | `tar -xzf` it, then open `envy-ops-desk` |
-| `envy-ops-desk-v0.1.0-windows-x86_64.zip` | Windows (64-bit) | Unzip, then run `envy-ops-desk.exe` |
-| `envy-ops-desk-v0.1.0-linux-x86_64.tar.gz` | Linux (64-bit) | `tar -xzf` it, then run `./envy-ops-desk` |
-| `envy_ops_desk-0.1.0-py3-none-any.whl` | Any OS with Python 3.10+ | `pip install` the wheel |
+| `envy-ops-desk-v0.2.0-macos-arm64.tar.gz` | macOS (Apple Silicon) | `tar -xzf` it, then open `envy-ops-desk` |
+| `envy-ops-desk-v0.2.0-windows-x86_64.zip` | Windows (64-bit) | Unzip, then run `envy-ops-desk.exe` |
+| `envy-ops-desk-v0.2.0-linux-x86_64.tar.gz` | Linux (64-bit) | `tar -xzf` it, then run `./envy-ops-desk` |
+| `envy_ops_desk-0.2.0-py3-none-any.whl` | Any OS with Python 3.10+ | `pip install` the wheel |
 | `SHA256SUMS.txt` | — | Verify your download first |
 
 Running `envy-ops-desk` with no arguments opens the window.
