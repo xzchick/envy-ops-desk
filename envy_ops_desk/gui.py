@@ -74,7 +74,7 @@ def _build():
     from PyQt6.QtGui import (QColor, QPainter, QLinearGradient, QRadialGradient, QFont,
                              QPen, QBrush)
     from PyQt6.QtWidgets import (QApplication, QWidget, QLabel, QPushButton, QPlainTextEdit,
-                                 QLineEdit, QComboBox, QTabWidget, QTableWidget, QTableWidgetItem,
+                                 QLineEdit, QComboBox, QSpinBox, QTabWidget, QTableWidget, QTableWidgetItem,
                                  QHeaderView, QAbstractItemView, QVBoxLayout, QHBoxLayout,
                                  QFormLayout, QInputDialog, QFileDialog, QMessageBox,
                                  QLineEdit as QLE)
@@ -179,6 +179,7 @@ def _build():
                                            ("Lock", self.lock, "pick"),
                                            ("Create handoff", self.create_handoff, "pick"),
                                            ("Import handoff", self.import_handoff, "pick"),
+                                           ("Verify handoff", self.verify_handoff, "pick"),
                                            ("Refresh due states", self.refresh_views, "pick")):
                 b = QPushButton(caption); b.setObjectName(name)
                 b.setCursor(Qt.CursorShape.PointingHandCursor); b.clicked.connect(handler)
@@ -190,6 +191,18 @@ def _build():
             self.plan_header.setReadOnly(True); self.plan_header.setFixedHeight(90)
             self.plan_header.setPlainText("No plan open. Create a new encrypted plan or open an existing one.")
             bl.addWidget(self.plan_header)
+
+            filters = QHBoxLayout()
+            self.f_mine = QComboBox(); self.f_mine.addItem("Everyone", None)
+            self.f_due = QComboBox(); self.f_due.addItem("Any due state", None)
+            for token, label in core.DUE_FILTERS.items():
+                self.f_due.addItem(label, token)
+            for box in (self.f_mine, self.f_due):
+                box.currentIndexChanged.connect(lambda _i: self.refresh_views())
+            filters.addWidget(self._tag("View as")); filters.addWidget(self.f_mine)
+            filters.addWidget(self._tag("Due")); filters.addWidget(self.f_due)
+            self.f_note = QLabel(""); self.f_note.setObjectName("status"); filters.addWidget(self.f_note, 1)
+            bl.addLayout(filters)
 
             self.views = QTabWidget(); self.views.setObjectName("tabs")
             self.t_assign = make_table(["Task", "Assignee", "Status", "Due UTC", "Due state", "Progress note"])
@@ -274,9 +287,19 @@ def _build():
             self.c_label = self._field(); self.c_assignee = self._field()
             self.c_due = self._field(); self.c_note = self._field()
             self.c_due.setPlaceholderText("2026-11-06T16:00:00+00:00  ·  'now'")
+            self.c_every = QSpinBox(); self.c_every.setRange(1, 3650); self.c_every.setValue(7)
+            self.c_every.setSuffix(" days")
+            self.c_times = QSpinBox(); self.c_times.setRange(1, 200); self.c_times.setValue(1)
+            self.c_times.setSuffix(" times")
+            repeat = QHBoxLayout()
+            repeat.addWidget(self._tag("every")); repeat.addWidget(self.c_every)
+            repeat.addWidget(self.c_times); repeat.addStretch(1)
+            repeat_hint = QLabel("1 time = a single check-in"); repeat_hint.setObjectName("status")
+            repeat.addWidget(repeat_hint)
             form.addRow(self._tag("Check-in"), self.c_label)
             form.addRow(self._tag("Assignee (optional)"), self.c_assignee)
-            form.addRow(self._tag("Due UTC"), self.c_due)
+            form.addRow(self._tag("First due UTC"), self.c_due)
+            form.addRow(self._tag("Repeat"), repeat)
             form.addRow(self._tag("Note (optional)"), self.c_note)
             row, self.c_status_msg = self._submit_row("Schedule check-in in a new revision", self.add_checkin)
             form.addRow(row)
@@ -360,6 +383,7 @@ def _build():
             self.source = self.secret = self.data = None
             for table in (self.t_assign, self.t_check, self.t_alias):
                 table.setRowCount(0)
+            self._refresh_filter_choices([]); self.f_due.setCurrentIndex(0); self.f_note.setText("")
             self.plan_header.setPlainText("Locked. The passphrase was cleared from memory.")
             self.path_label.setText("")
             self._refresh_targets()
@@ -471,6 +495,14 @@ def _build():
                 self.p_note.clear()
 
         def add_checkin(self):
+            if self.c_times.value() > 1:
+                ok = self.schedule_recurring(self.c_label.text().strip(), normalize_utc(self.c_due.text()),
+                                             self.c_every.value(), self.c_times.value(),
+                                             self.c_assignee.text().strip(), self.c_note.text().strip())
+                if ok:
+                    self.c_label.clear(); self.c_assignee.clear(); self.c_due.clear(); self.c_note.clear()
+                    self.c_times.setValue(1)
+                return
             value = {"kind": "checkin", "title": self.c_label.text().strip(),
                      "due_utc": normalize_utc(self.c_due.text())}
             if self.c_assignee.text().strip():
@@ -480,6 +512,53 @@ def _build():
             self._append(value, self.c_status_msg)
             if self.data:
                 self.c_label.clear(); self.c_assignee.clear(); self.c_due.clear(); self.c_note.clear()
+
+        def schedule_recurring(self, label, first_due, every_days, count, assignee="", note=""):
+            """Add `count` check-ins, `every_days` apart, in one new revision. True on success."""
+            if not self.data:
+                return False
+            msg = self.c_status_msg
+            if not label or not first_due:
+                msg.setText("A recurring check-in needs a label and a first due time.")
+                msg.setStyleSheet(f"#status{{color:{PINK};}}"); return False
+            dest = self._next_revision_path()
+            try:
+                result = core.recurring_checkins(self.source, dest, self.secret, label, first_due,
+                                                 every_days, count, assignee, note)
+            except (OpsDeskError, OSError) as exc:
+                msg.setText(str(exc)); msg.setStyleSheet(f"#status{{color:{PINK};}}"); return False
+            self.source = Path(result["output"])
+            self.data, _ = core._load(self.source, self.secret)
+            self.refresh_views()
+            self.views.setCurrentIndex(1)
+            msg.setText(f"Scheduled {count} check-ins every {every_days} days → revision {result['revision']}")
+            msg.setStyleSheet(f"#status{{color:{CYAN};}}")
+            return True
+
+        def verify_handoff(self):
+            path, _ = QFileDialog.getOpenFileName(self, "Verify a handoff bundle (it is not imported)", "",
+                                                  "Handoff bundle (*.envyho);;All files (*)")
+            if not path:
+                return
+            handoff_secret = self._ask_passphrase(confirm=False, title="Handoff passphrase",
+                                                  prompt="Handoff passphrase:")
+            if handoff_secret is None:
+                return
+            result = self.verify_handoff_file(path, handoff_secret)
+            if result:
+                self._warn(f"The handoff is intact: it decrypted with this passphrase and its journal hash chain "
+                           f"checks out.\n\nRevision {result['revision']} · {result['records']} records · "
+                           f"created {result['handoff_created_utc']}\n\nThis proves the passphrase and integrity, "
+                           "not who created it. Nothing was imported.",
+                           icon=QMessageBox.Icon.Information, title="Handoff verified")
+
+        def verify_handoff_file(self, path, handoff_secret):
+            """Check a handoff decrypts and its chain is intact, without importing it."""
+            try:
+                return core.handoff_verify(path, handoff_secret)
+            except (OpsDeskError, OSError) as exc:
+                self._warn(f"This handoff did not verify: {exc}", title="Handoff not verified")
+                return None
 
         def add_ack(self):
             target = self.k_target.currentData()
@@ -498,6 +577,18 @@ def _build():
             if not self.data:
                 return
             view = core.state(self.data)
+            self._refresh_filter_choices(view["aliases"])
+            mine, due = self.f_mine.currentData(), self.f_due.currentData()
+            total = (len(view["assignments"]), len(view["checkins"]))
+            if mine or due:
+                core.narrow(view, mine=mine, due=due)
+                role = next((a["role_label"] for a in view["aliases"]
+                             if a["alias"] == mine and a["role_label"]), "")
+                who = (f" for {mine}" + (f" or the {role} role" if role else "")) if mine else ""
+                self.f_note.setText(f"Showing {len(view['assignments'])} of {total[0]} assignments and "
+                                    f"{len(view['checkins'])} of {total[1]} check-ins{who}.")
+            else:
+                self.f_note.setText("")
             self.plan_header.setPlainText(
                 f"{view['title']}  ·  revision {view['revision']}\n"
                 f"{view['objective'] or '(no objective recorded)'}\n"
@@ -544,6 +635,22 @@ def _build():
                 t.setItem(i, 2, self._cell(r["note"]))
             t.resizeColumnsToContents(); t.horizontalHeader().setStretchLastSection(True)
 
+        def _refresh_filter_choices(self, aliases):
+            """Keep the 'View as' list in step with the plan's aliases, keeping the choice."""
+            keep = self.f_mine.currentData()
+            names = [a["alias"] for a in aliases]
+            have = [self.f_mine.itemData(i) for i in range(1, self.f_mine.count())]
+            if names == have:
+                return
+            self.f_mine.blockSignals(True)
+            self.f_mine.clear(); self.f_mine.addItem("Everyone", None)
+            for a in aliases:
+                label = a["alias"] + (f" ({a['role_label']})" if a["role_label"] else "")
+                self.f_mine.addItem(f"My items: {label}", a["alias"])
+            idx = self.f_mine.findData(keep) if keep else 0
+            self.f_mine.setCurrentIndex(max(idx, 0))
+            self.f_mine.blockSignals(False)
+
         def _refresh_targets(self):
             self.p_target.clear(); self.k_target.clear()
             if not self.data:
@@ -569,7 +676,7 @@ def _build():
             return candidate
 
         def _set_enabled(self, on):
-            for w in (self.views, self.forms):
+            for w in (self.views, self.forms, self.f_mine, self.f_due):
                 w.setEnabled(on)
 
         def _warn(self, message, icon=None, title="Ops Desk"):
@@ -595,6 +702,10 @@ QWidget {{ color: {INK}; font-family: Helvetica, Arial, sans-serif; font-size: 1
 #field:focus {{ border: 1px solid {CYAN}; }}
 QComboBox {{ background: {PANEL_HI}; border: 1px solid {LINE}; border-radius: 8px; color: {INK}; padding: 6px 10px; }}
 QComboBox QAbstractItemView {{ background: {PANEL}; color: {INK}; selection-background-color: {VIOLET}; }}
+QSpinBox {{ background: {PANEL_HI}; border: 1px solid {LINE}; border-radius: 8px; color: {INK}; padding: 6px 10px;
+            min-width: 92px; }}
+QSpinBox:focus {{ border: 1px solid {CYAN}; }}
+QSpinBox::up-button, QSpinBox::down-button {{ background: {PANEL}; border: none; width: 16px; }}
 QTableWidget {{ background: {PANEL_HI}; alternate-background-color: {PANEL}; border: 1px solid {LINE};
                 border-radius: 10px; gridline-color: {LINE}; }}
 QTableWidget::item {{ padding: 4px 6px; }}

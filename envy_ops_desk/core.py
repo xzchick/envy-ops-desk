@@ -439,6 +439,12 @@ def state_from(source, secret, now=None, assignee=None, due=None, mine=None):
     """
     data, _ = _load(source, secret)
     result = state(data, _parse_utc(now) if isinstance(now, str) else now)
+    return narrow(result, assignee=assignee, due=due, mine=mine)
+
+
+def narrow(result, assignee=None, due=None, mine=None):
+    """Narrow a state() result to one assignee, one role alias ("my items") and/or one
+    due state; see state_from(). Returns the same dict, filtered in place."""
     if mine is not None:
         key = mine.strip().lower()
         roles = {a["role_label"].strip().lower() for a in result["aliases"]
