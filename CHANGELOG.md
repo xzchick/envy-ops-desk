@@ -2,7 +2,7 @@
 
 All notable changes to this project. This project adheres to semantic versioning.
 
-## Unreleased
+## v0.2.3 — 2026-11-24
 
 - Window: Schedule check-in can repeat — every N days, M times — in one revision
 - Window: a View as filter shows "my items" for a role alias (work addressed to the alias or the
@@ -10,6 +10,7 @@ All notable changes to this project. This project adheres to semantic versioning
 - Window: Verify handoff checks a bundle decrypts and its journal chain is intact, without importing it
 - core: `narrow()` applies the same filters to a state you already have (`state_from` uses it)
 - Offscreen GUI tests that drive the real window
+- Add a verified one-line Linux installer (`install.sh`)
 
 ## v0.2.2 — 2026-11-16
 
